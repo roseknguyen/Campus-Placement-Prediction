@@ -1,0 +1,267 @@
+
+/* Load Data*/
+PROC IMPORT OUT= WORK.IMPORT 
+            DATAFILE= "C:\Users\TNGUY207\Documents\ECO520\Placement_Data
+_Full_Class.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+PROC CONTENTS DATA=WORK.IMPORT; RUN;
+
+PROC SQL;
+CREATE TABLE WORK.QUERY AS
+SELECT sl_no , gender , ssc_p , ssc_b , hsc_p , hsc_b , hsc_s , degree_p , degree_t ,
+	   workex , etest_p , specialisation , mba_p , 'status'n , salary FROM WORK.IMPORT;
+RUN;
+QUIT;
+
+
+/* Copy data */
+DATA placement_data;SET WORK.QUERY ;
+PROC MEANS;RUN;
+Proc FREQ DATA= placement_data; 
+TABLES status gender ssc_b hsc_b status
+       hsc_s degree_t workex specialisation;
+RUN;
+
+
+/* Find missing data and outliers */
+	/* Missing data for numeric variables */
+		PROC MEANS DATA=placement_data NMISS N;RUN;    /* 6633 missing datas in salary are for the staudents that are not hired */
+	/* Missing data for categorical variables */	
+		PROC SQL; 
+   		SELECT nmiss(gender) AS gender_miss, nmiss(ssc_b) AS sscb_miss, nmiss(hsc_b) AS hscb_miss, nmiss (hsc_s) AS hscs_miss,
+    	  	   nmiss(degree_t) AS degreet_miss, nmiss(workex) AS workex_miss, nmiss(specialisation) AS specialisation_miss,
+    	       nmiss(status) AS status_miss
+   		FROM placement_data; 
+		QUIT;
+	/* Finding outliers*/	
+		PROC UNIVARIATE data=placement_data plot ;run;
+	/* Removing the salary values that are higher than 900000 */	
+		DATA placement_data;SET WORK.QUERY;if salary<900000; RUN;
+
+
+/* Changing Variables Name*/
+DATA placement_data ; SET WORK.query ;
+LABEL sl_no="Serial Number";
+LABEL ssc_p="Secondary Education Percentage" ;
+LABEL ssc_b="Board of Education" ;
+LABEL hsc_p="Higher Secondary Education Percentage" ;
+LABEL hsc_b="Board of Education";
+LABEL hsc_s="Specialization in Higher Secondary Education" ;
+LABEL degree_p="Degree Percentage" ;
+LABEL degree_t="Undergrad Field of Study" ;
+LABEL workex="Work Experience" ;
+LABEL etest_p="Employability Test Percentage" ;
+LABEL mba_p="MBA Percentage" ;
+
+/* Descriptive analytics for all numeric variables*/
+PROC MEANS ; RUN ;
+/* Descriptive analytics of Salary */
+	/* Salary by gender and undergraduate degree*/
+		PROC SUMMARY print n min max mean median std data=placement_data;
+		VAR salary;
+		CLASS gender degree_t;
+		RUN;
+	/* Salary by different categorical variables */
+		PROC MEANS DATA=placement_data; VAR salary; CLASS gender; RUN;
+		PROC MEANS DATA=placement_data; VAR salary; CLASS degree_t; RUN;
+		PROC MEANS DATA=placement_data; VAR salary; CLASS workex; RUN;
+		PROC MEANS DATA=placement_data; VAR salary; CLASS specialisation; RUN;
+		PROC MEANS DATA=placement_data; VAR salary; CLASS ssc_b; RUN;
+		PROC MEANS DATA=placement_data; VAR salary; CLASS hsc_b; RUN;
+		PROC MEANS DATA=placement_data; VAR salary; CLASS hsc_s; RUN;
+	
+
+/* Desciptive analytics of Status by each numeric variables*/
+PROC SUMMARY print n min max mean median std DATA=placement_data;
+VAR mba_p ssc_p hsc_p degree_p etest_p;
+CLASS status;
+RUN;
+
+/* Frequency Tables for Status*/
+PROC FREQ DATA=placement_data;     /*To see how many students are hired and not hired in total*/
+TABLES status;
+RUN;  
+
+PROC FREQ DATA=placement_data;      /* Number of hired students based on the categorical variables */
+TABLES status *(gender degree_t specialisation 
+	   workex ssc_b hsc_b hsc_s) ;
+RUN; 
+
+/* Relationship between Salary with all of the numeric variables */
+PROC CORR DATA=placement_data;
+	VAR salary ssc_p hsc_p degree_p etest_p mba_p;
+RUN;
+
+
+/* Graphs*/
+	/* Scatter plot between Salary vs. all numeric variables */
+		PROC SGSCATTER DATA=placement_data;
+ 			plot salary *( ssc_p hsc_p degree_p etest_p mba_p)/ reg/lineattrs=(color=red thickness=2);
+ 		RUN;
+ 	/* Bar chart of status vs. degree_p */	
+ 		title "The Average of Degree Percentage by Status";
+		PROC SGPLOT DATA=placement_data;
+    		VBAR status / GROUP= STATUS groupdisplay=cluster response=degree_p stat=mean DATALABEL;
+		RUN;
+	/* Bar chart of status vs. mba_p*/	
+		title "The MBA Percentage by Status";
+		PROC SGPLOT DATA=placement_data;
+    		VBAR status / GROUP= STATUS groupdisplay=cluster response=mba_p stat=mean DATALABEL;
+		RUN;
+	/* Bar chart of status vs. etest_p*/	
+		title "The Empoyability test percentage by Status";
+		PROC SGPLOT DATA=placement_data;
+    		VBAR status / GROUP= STATUS groupdisplay=cluster response=etest_p stat=mean DATALABEL;
+		RUN;
+ 	/* Bar chart of status vs. hsc_p */	
+ 		title "The Average of Higher Secondary Education Percentage by Status";
+		PROC SGPLOT DATA=placement_data;
+    		VBAR status / GROUP= STATUS groupdisplay=cluster response=hsc_p stat=mean DATALABEL;
+		RUN;
+	/* Salary by Undergraduate Degree for Females and Males */	
+		title "The Average of Salary by Undergraduate Degree for Females and Males";
+		PROC SGPLOT data=placement_data;
+    		vbar degree_t / group=gender groupdisplay=cluster response=salary stat=mean datalabel;
+		run;
+	/* Salary by Specialization for Females and Males */	
+		title "The Average of Salary by Specialization for Females and Males";
+		PROC SGPLOT data=placement_data;
+  			vbar specialisation / group=gender groupdisplay=cluster response=salary stat=mean;
+		RUN;
+	/* Distribution of Salary*/
+		title'Distribution of Salary';
+		PROC SGPLOT data=placement_data;
+   		HISTOGRAM salary/ BINSTART=200000 BINWIDTH=20000 SHOWBINS;
+		RUN;
+		
+/* one-way ANOVA the salary vs all categorical variables */
+PROC ANOVA DATA=placement_data;
+class gender degree_t specialisation workex ssc_b hsc_b hsc_s;
+model salary = gender degree_t specialisation workex ssc_b hsc_b hsc_s;
+means gender degree_t specialisation workex ssc_b hsc_b hsc_s;
+RUN;
+
+/* two-way ANOVA the salary vs Gender and each of other categorical variable */
+	/* Salary vs Gender and undergraduate degree*/
+		PROC ANOVA DATA=placement_data;
+		class gender specialisation;
+		model salary = gender degree_t gender*degree_t ;
+		means gender degree_t;
+		RUN;
+	/* Salary vs Gender and specialisation*/
+		PROC ANOVA DATA=placement_data;
+		class gender specialisation;
+		model salary = gender specialisation gender*specialisation ;
+		means gender specialisation;
+		RUN;
+	/* Salary vs Gender and work experience*/
+		PROC ANOVA DATA=placement_data;
+		class gender workex;
+		model salary = gender workex gender*workex ;
+		means gender workex;
+		RUN;
+	/* Salary vs Gender and ssc_b*/
+		PROC ANOVA DATA=placement_data;
+		class gender ssc_b;
+		model salary = gender ssc_b gender*ssc_b ;
+		means gender ssc_b;
+		RUN;
+	/* Salary vs Gender and hsc_b*/
+		PROC ANOVA DATA=placement_data;
+		class gender hsc_b;
+		model salary = gender hsc_b gender*hsc_b ;
+		means gender hsc_b;
+		RUN;
+	/* Salary vs Gender and hsc_s*/
+		PROC ANOVA DATA=placement_data;
+		class gender hsc_s;
+		model salary = gender hsc_s gender*hsc_s ;
+		means gender hsc_s;
+		RUN;
+/* Clustering */
+PROC CLUSTER DATA=placement_data method=centroid  out=clsmba print= 7 ccc pseudo ;
+   VAR mba_p etest_p;
+   ID sl_no ; 
+   COPY workex status mba_p etest_p sl_no  ;
+RUN ;
+
+/*Tree Data*/ 
+PROC TREE data=clsmba out=mbatree ncl= 7 ;     
+     copy mba_p etest_p sl_no ; 
+run ;
+
+/* Step3 : Graph to verification*/ 
+proc sgplot data=mbatree ;
+      scatter y=etest_p x=mba_p / group=cluster   datalabel=sl_no ;
+   run;
+
+
+/* II. Non-Hierarchical Clustering - K-Means */
+/* K means */
+proc fastclus data=placement_data out=kmeanmba maxclusters=7;
+var etest_p mba_p ;
+run;
+
+/*  using K-means */
+proc sgplot data=kmeanmba ; 
+scatter y= etest_p x= mba_p / group=cluster datalabel=sl_no ;
+styleattrs datacontrastcolors=(blue red green orange) ;
+run;
+
+/*III. ANOVA Analysis for the Clusters*/
+
+proc anova data=mbatree ;
+   class cluster ;
+   model etest_p = cluster   ;
+   means cluster / BON ;
+run ; 
+
+proc anova data=mbatree ;
+   class cluster ;
+   model mba_p = cluster   ;
+   means cluster / BON ;
+run ; 
+
+/* IV. Using Clusters as a group to analyze */
+/* Graphs with the group effect */
+title "E-Test and MBA Percentage relationship with Clusters" ; 
+proc sgplot data=kmeanmba ;
+scatter y= etest_p x= mba_p / group=cluster datalabel=sl_no ;
+styleattrs datacontrastcolors=(blue red green orange) ;
+reg y=etest_p x=mba_p / group=cluster;
+run;
+
+
+/* Graphs without the group effects */
+title "E-Test and MBA Percentage relationship without Clusters" ; 
+proc sgplot data=kmeanmba ;
+scatter y= etest_p x= mba_p / group=cluster datalabel=sl_no ;
+styleattrs datacontrastcolors=(blue red green orange) ;
+reg y=etest_p x=mba_p;
+run;
+
+/*Regression*/
+DATA plcmt_reg; SET kmeanmba;
+if cluster = 1 then dummy1 = 1; else dummy1 = 0;
+if cluster = 2 then dummy2 = 1; else dummy2 = 0;
+if cluster = 3 then dummy3 = 1; else dummy3 = 0;
+if cluster = 4 then dummy4 = 1; else dummy4 = 0;
+if cluster = 5 then dummy5 = 1; else dummy5 = 0;
+if cluster = 6 then dummy6 = 1; else dummy6 = 0;
+if cluster = 7 then dummy7 = 1; else dummy7 = 0;
+run;
+
+proc reg data=plcmt_reg;
+	model salary = mba_p etest_p degree_p dummy1-dummy7;
+run ; 
+
+proc glm data=plcmt_reg;
+class cluster ;
+model salary = mba_p etest_p degree_p cluster mba_p*cluster / solution;
+run;
+
+
+
